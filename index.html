@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSON Table Viewer with Advanced Formatting</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 800px;
+            margin: auto;
+            background: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .empty-cell {
+            background-color: #ffcccc;
+        }
+        #fileInput {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>JSON Table Viewer with Advanced Formatting</h1>
+        <input type="file" id="fileInput" accept=".json">
+        <div id="tableContainer"></div>
+    </div>
+
+    <script>
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                try {
+                    const jsonData = JSON.parse(e.target.result);
+                    displayTable(jsonData);
+                } catch (error) {
+                    console.error('Error parsing JSON:', error);
+                    alert('Error parsing JSON file. Please make sure it\'s a valid JSON.');
+                }
+            };
+
+            reader.readAsText(file);
+        });
+
+        function convertNumber(text, isNumericColumn, preserveSpaces) {
+            const numberMap = {
+                '٦': '7',
+                '٨': '1',
+                '٩': '9',
+                '٥': '0',
+                'b': '6',
+                '١': '1'
+            };
+            
+            // Apply number conversion
+            let convertedText = text.split('').map(char => numberMap[char] || char).join('');
+            
+            // Remove spaces only if not preserving spaces
+            if (!preserveSpaces) {
+                convertedText = convertedText.replace(/\s/g, '');
+            }
+            
+            // For numeric columns, ensure only numbers remain and adjust range
+            if (isNumericColumn) {
+                convertedText = convertedText.replace(/[^\d.]/g, '');
+                
+                // Adjust numbers over 20
+                if (convertedText.length > 2 && !convertedText.includes('.')) {
+                    convertedText = convertedText.slice(0, 2) + '.' + convertedText.slice(2);
+                }
+                
+                // Ensure the number is between 0 and 20
+                let num = parseFloat(convertedText);
+                if (num > 20) {
+                    num = 20 + (num - 20) / Math.pow(10, convertedText.length - 2);
+                    convertedText = num.toFixed(2);
+                }
+            }
+            
+            return convertedText;
+        }
+
+        function displayTable(data) {
+            const tableContainer = document.getElementById('tableContainer');
+            tableContainer.innerHTML = ''; // Clear previous content
+
+            if (data.results && data.results.microsoft && data.results.microsoft.pages) {
+                const table = data.results.microsoft.pages[0].tables[0];
+                if (table && table.rows) {
+                    const tableEl = document.createElement('table');
+                    
+                    // Create header and identify column types
+                    const headerRow = document.createElement('tr');
+                    const numericColumns = [];
+                    const nameColumns = [];
+                    table.rows[0].cells.forEach((cell, index) => {
+                        const th = document.createElement('th');
+                        th.textContent = convertNumber(cell.text, false, true);
+                        headerRow.appendChild(th);
+                        if (['التقويم', 'الفرض', 'الاختبار'].includes(cell.text)) {
+                            numericColumns.push(index);
+                        } else if (['الاسم', 'اللقب'].includes(cell.text)) {
+                            nameColumns.push(index);
+                        }
+                    });
+                    tableEl.appendChild(headerRow);
+
+                    // Create data rows
+                    for (let i = 1; i < table.rows.length; i++) {
+                        const row = document.createElement('tr');
+                        table.rows[i].cells.forEach((cell, index) => {
+                            const td = document.createElement('td');
+                            const isNumericColumn = numericColumns.includes(index);
+                            const isNameColumn = nameColumns.includes(index);
+                            const convertedText = convertNumber(cell.text, isNumericColumn, isNameColumn);
+                            td.textContent = convertedText;
+                            
+                            // Highlight empty cells
+                            if (convertedText.trim() === '') {
+                                td.classList.add('empty-cell');
+                            }
+                            
+                            row.appendChild(td);
+                        });
+                        tableEl.appendChild(row);
+                    }
+
+                    tableContainer.appendChild(tableEl);
+                } else {
+                    tableContainer.textContent = 'No table data found in the JSON.';
+                }
+            } else {
+                tableContainer.textContent = 'Invalid JSON structure. Expected "results.microsoft.pages" path.';
+            }
+        }
+    </script>
+</body>
+</html>
